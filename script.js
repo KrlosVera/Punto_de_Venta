@@ -1,6 +1,6 @@
 // script.js
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, getDoc } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, getDoc, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
 import { firebaseConfig } from './config.js';
 
 // Inicializar Firebase
@@ -11,6 +11,88 @@ const db = getFirestore(app);
 let productosEnVenta = [];
 let consecutivoActual = 1;
 let stockTemporal = new Map(); // Para llevar el control del stock mientras se hace la venta
+// let scannerIsRunning = false; // Variables para el escáner
+
+
+// Agregar las funciones del escáner
+let scannerIsRunning = false;
+
+// Convertir startScanner a una función async
+const startScanner = () => {
+    return new Promise((resolve, reject) => {
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector("#interactive"),
+                constraints: {
+                    facingMode: "environment"
+                },
+            },
+            decoder: {
+                readers: [
+                    "ean_reader",
+                    "ean_8_reader",
+                    "code_128_reader",
+                    "code_39_reader",
+                    "upc_reader"
+                ]
+            }
+        }, function (err) {
+            if (err) {
+                document.getElementById('scanner-error').style.display = 'block';
+                document.getElementById('scanner-error').textContent =
+                    "Error al iniciar la cámara. Por favor, verifica que has dado los permisos necesarios.";
+                reject(err);
+                return;
+            }
+            scannerIsRunning = true;
+            Quagga.start();
+            resolve();
+        });
+
+        Quagga.onDetected(async function (result) {
+            if (result.codeResult.code) {
+                document.getElementById('codigo-producto').value = result.codeResult.code;
+                stopScanner();
+                // Si buscarProducto es async
+                try {
+                    await buscarProducto(result.codeResult.code);
+                } catch (error) {
+                    console.error("Error al buscar producto:", error);
+                }
+            }
+        });
+    });
+};
+
+const stopScanner = () => {
+    if (scannerIsRunning) {
+        Quagga.stop();
+        scannerIsRunning = false;
+    }
+    document.getElementById('scanner-modal').style.display = 'none';
+    document.getElementById('scanner-error').style.display = 'none';
+};
+
+// Event listeners
+document.getElementById('scan-button').addEventListener('click', async () => {
+    document.getElementById('scanner-modal').style.display = 'block';
+    try {
+        await startScanner();
+    } catch (error) {
+        console.error("Error al iniciar el escáner:", error);
+    }
+});
+
+document.querySelector('.close-scanner').addEventListener('click', stopScanner);
+
+document.getElementById('scanner-modal').addEventListener('click', function (e) {
+    if (e.target === this) {
+        stopScanner();
+    }
+});
+//------------------------------------------------------------------------------------------
 
 // Funciones para el manejo de inventario
 async function agregarProducto(producto) {
@@ -161,40 +243,57 @@ async function guardarVenta() {
     }
 
     try {
-        // Obtener el último consecutivo nuevamente antes de guardar
-        await obtenerUltimoConsecutivo();
+        // Primero determinar el nuevo consecutivo
+        const ventasRef = collection(db, "ventas");
+        let nuevoConsecutivo = 1;
+
+        // Intentar obtener el último consecutivo
+        try {
+            const querySnapshot = await getDocs(ventasRef);
+            if (!querySnapshot.empty) {
+                // Encontrar el máximo consecutivo
+                const consecutivos = querySnapshot.docs.map(doc => doc.data().consecutivo);
+                nuevoConsecutivo = Math.max(...consecutivos) + 1;
+            }
+        } catch (error) {
+            console.error("Error al obtener consecutivo:", error);
+            // Continuar con consecutivo 1 si hay error
+        }
 
         const venta = {
             fecha: new Date().toISOString(),
-            consecutivo: consecutivoActual,
+            consecutivo: nuevoConsecutivo,
             productos: productosEnVenta,
             total: productosEnVenta.reduce((sum, prod) => sum + prod.total, 0)
         };
 
         // Guardar la venta
-        await addDoc(collection(db, "ventas"), venta);
-        consecutivoActual++; // Incrementar para la siguiente venta
-        document.getElementById('consecutivo').textContent = consecutivoActual;
+        await addDoc(ventasRef, venta);
 
         // Actualizar el stock de los productos
         for (const producto of productosEnVenta) {
-            const q = query(collection(db, "productos"), where("codigo", "==", producto.codigo));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const docRef = querySnapshot.docs[0].ref;
-                const productoActual = querySnapshot.docs[0].data();
+            const prodQuery = query(collection(db, "productos"), where("codigo", "==", producto.codigo));
+            const prodSnapshot = await getDocs(prodQuery);
+            if (!prodSnapshot.empty) {
+                const docRef = prodSnapshot.docs[0].ref;
+                const productoActual = prodSnapshot.docs[0].data();
                 await updateDoc(docRef, {
                     stock: productoActual.stock - producto.cantidad
                 });
             }
         }
 
+        // Actualizar UI
+        consecutivoActual = nuevoConsecutivo;
+        document.getElementById('consecutivo').textContent = consecutivoActual;
+
         alert('Venta guardada correctamente');
         limpiarVenta();
         cargarInventario();
+        cargarRegistroVentas();
     } catch (error) {
-        console.error("Error al guardar venta: ", error);
-        alert('Error al guardar la venta');
+        console.error("Error al guardar venta:", error);
+        alert('Error al guardar la venta: ' + error.message);
     }
 }
 
@@ -256,17 +355,37 @@ async function cargarRegistroVentas(fechaInicio = null, fechaFin = null) {
     tbody.innerHTML = '';
 
     try {
-        let q = collection(db, "ventas");
+        const ventasRef = collection(db, "ventas");
+        let querySnapshot;
+
         if (fechaInicio && fechaFin) {
-            q = query(q,
-                where("fecha", ">=", fechaInicio),
-                where("fecha", "<=", fechaFin)
+            // Convertir las fechas a formato ISO y ajustar para incluir todo el día
+            const fechaInicioISO = new Date(fechaInicio + 'T00:00:00').toISOString();
+            const fechaFinISO = new Date(fechaFin + 'T23:59:59').toISOString();
+
+            const q = query(ventasRef,
+                where("fecha", ">=", fechaInicioISO),
+                where("fecha", "<=", fechaFinISO)
             );
+            querySnapshot = await getDocs(q);
+        } else {
+            querySnapshot = await getDocs(ventasRef);
         }
 
-        const querySnapshot = await getDocs(q);
-        querySnapshot.forEach((doc) => {
-            const venta = doc.data();
+        if (querySnapshot.empty) {
+            tbody.innerHTML = '<tr><td colspan="8">No hay registros de ventas</td></tr>';
+            return;
+        }
+
+        // Ordenar los documentos por consecutivo de manera descendente
+        const ventas = querySnapshot.docs
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }))
+            .sort((a, b) => b.consecutivo - a.consecutivo);
+
+        ventas.forEach((venta) => {
             venta.productos.forEach(producto => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -277,12 +396,16 @@ async function cargarRegistroVentas(fechaInicio = null, fechaFin = null) {
                     <td>${producto.cantidad}</td>
                     <td>$${producto.precioUnitario.toLocaleString()}</td>
                     <td>$${producto.total.toLocaleString()}</td>
+                    <td>
+                        <button onclick="eliminarVenta('${venta.id}')" class="eliminar">Eliminar</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
         });
     } catch (error) {
-        console.error("Error al cargar registro de ventas: ", error);
+        console.error("Error al cargar registro de ventas:", error);
+        tbody.innerHTML = '<tr><td colspan="8">Error al cargar los registros: ' + error.message + '</td></tr>';
     }
 }
 
@@ -308,6 +431,49 @@ async function obtenerUltimoConsecutivo() {
     }
 }
 
+
+// Función para eliminar una venta
+async function eliminarVenta(id) {
+    if (!confirm('¿Está seguro de eliminar esta venta? Esta acción no se puede deshacer.')) {
+        return;
+    }
+
+    try {
+        // Primero obtener la venta para restaurar el stock
+        const ventaRef = doc(db, "ventas", id);
+        const ventaDoc = await getDoc(ventaRef);
+
+        if (ventaDoc.exists()) {
+            const venta = ventaDoc.data();
+
+            // Restaurar el stock de cada producto
+            for (const producto of venta.productos) {
+                const prodQuery = query(collection(db, "productos"),
+                    where("codigo", "==", producto.codigo));
+                const prodSnapshot = await getDocs(prodQuery);
+
+                if (!prodSnapshot.empty) {
+                    const docRef = prodSnapshot.docs[0].ref;
+                    const productoActual = prodSnapshot.docs[0].data();
+                    await updateDoc(docRef, {
+                        stock: productoActual.stock + producto.cantidad
+                    });
+                }
+            }
+
+            // Eliminar la venta
+            await deleteDoc(ventaRef);
+            alert('Venta eliminada correctamente');
+            cargarRegistroVentas(); // Recargar la tabla
+            cargarInventario(); // Actualizar el inventario
+        }
+    } catch (error) {
+        console.error("Error al eliminar la venta:", error);
+        alert('Error al eliminar la venta: ' + error.message);
+    }
+}
+
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
     // Cargar datos iniciales
@@ -323,7 +489,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         menuLateral.classList.toggle('activo');
     });
 
-   
+
     // Navegación del menú
     document.querySelectorAll('.menu-lateral a').forEach(enlace => {
         enlace.addEventListener('click', (e) => {
@@ -343,6 +509,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cargarRegistroVentas();
             }
         });
+    });
+
+    // Event listener para filtro de fechas
+    document.getElementById('filtrar').addEventListener('click', () => {
+        const fechaInicio = document.getElementById('fecha-inicio').value;
+        const fechaFin = document.getElementById('fecha-fin').value;
+
+        if (!fechaInicio || !fechaFin) {
+            alert('Por favor seleccione ambas fechas para filtrar');
+            return;
+        }
+
+        if (fechaInicio > fechaFin) {
+            alert('La fecha de inicio debe ser anterior o igual a la fecha final');
+            return;
+        }
+
+        cargarRegistroVentas(fechaInicio, fechaFin);
     });
 
     // Event listener para registro de productos
@@ -371,12 +555,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('cancelar').addEventListener('click', limpiarVenta);
 
     // Event listener para filtro de fechas
-    document.getElementById('filtrar').addEventListener('click', () => {
-        const fechaInicio = document.getElementById('fecha-inicio').value;
-        const fechaFin = document.getElementById('fecha-fin').value;
-        if (fechaInicio && fechaFin) {
-            cargarRegistroVentas(fechaInicio, fechaFin);
-        }
+    // document.getElementById('filtrar').addEventListener('click', () => {
+    //     const fechaInicio = document.getElementById('fecha-inicio').value;
+    //     const fechaFin = document.getElementById('fecha-fin').value;
+    //     if (fechaInicio && fechaFin) {
+    //         cargarRegistroVentas(fechaInicio, fechaFin);
+    //     }
+    // });
+
+
+    // En tu script.js, dentro del DOMContentLoaded
+    document.getElementById('scan-button').addEventListener('click', () => {
+        const root = document.getElementById('scanner-container');
+        const handleCodeDetected = (code) => {
+            document.getElementById('codigo-producto').value = code;
+            // Opcionalmente, puedes activar la búsqueda automáticamente
+            buscarProducto(code);
+        };
+
+        // Renderizar el componente del escáner
+        const scannerComponent = React.createElement(BarcodeScanner, {
+            onCodeDetected: handleCodeDetected,
+            onClose: () => {
+                root.style.display = 'none';
+                ReactDOM.unmountComponentAtNode(root);
+            }
+        });
+
+        root.style.display = 'block';
+        ReactDOM.render(scannerComponent, root);
     });
 
 
@@ -422,3 +629,4 @@ window.eliminarDeVenta = eliminarDeVenta;
 window.eliminarProducto = eliminarProducto;
 window.editarProducto = editarProducto;
 window.cerrarModalEdicion = cerrarModalEdicion;
+window.eliminarVenta = eliminarVenta;

@@ -9,6 +9,7 @@
     <!-- Importar Firebase -->
     <script type="module" src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js"></script>
     <script type="module" src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 </head>
 
 <body>
@@ -44,6 +45,9 @@
                     <div class="campo-busqueda">
                         <label for="codigo-producto">CÓDIGO:</label>
                         <input type="text" id="codigo-producto" placeholder="Introduzca el código del producto">
+                        <button id="scan-button" class="scan-button">
+                            <i class="fas fa-camera"></i> Escanear
+                        </button>
                         <button id="registrar">REGISTRAR</button>
                     </div>
                 </div>
@@ -147,6 +151,7 @@
                             <th>CANTIDAD</th>
                             <th>P. UNITARIO</th>
                             <th>TOTAL</th>
+                            <th>ACCIONES</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -183,6 +188,19 @@
                     <button type="button" onclick="cerrarModalEdicion()">Cancelar</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Agregar el contenedor del escáner al final del body -->
+    <div id="scanner-modal" class="scanner-modal">
+        <div class="scanner-content">
+            <div class="scanner-header">
+                <h3>Escanear Código de Barras</h3>
+                <button class="close-scanner">&times;</button>
+            </div>
+            <div id="interactive" class="viewport"></div>
+            <div id="scanner-error" class="scanner-error"></div>
+            <p class="scanner-help">Posiciona el código de barras dentro del recuadro</p>
         </div>
     </div>
 

@@ -16,6 +16,9 @@ let stockTemporal = new Map(); // Para llevar el control del stock mientras se h
 
 // Agregar las funciones del escáner
 let scannerIsRunning = false;
+let lastScannedCode = null;
+let lastScannedTime = 0;
+const SCAN_DELAY = 3000; // 3 segundos de espera entre escaneos
 
 // Convertir startScanner a una función async
 const startScanner = () => {
@@ -47,17 +50,30 @@ const startScanner = () => {
                 return;
             }
             scannerIsRunning = true;
+            // Resetear las variables de control al iniciar el escáner
+            lastScannedCode = null;
+            lastScannedTime = 0;
             Quagga.start();
             resolve();
         });
 
         Quagga.onDetected(async function (result) {
-            if (result.codeResult.code) {
-                document.getElementById('codigo-producto').value = result.codeResult.code;
+            const code = result.codeResult.code;
+            const currentTime = Date.now();
+
+            // Verificar si es un código diferente o si ha pasado suficiente tiempo
+            if (code &&
+                (code !== lastScannedCode ||
+                    currentTime - lastScannedTime > SCAN_DELAY)) {
+
+                lastScannedCode = code;
+                lastScannedTime = currentTime;
+
+                document.getElementById('codigo-producto').value = code;
                 stopScanner();
-                // Si buscarProducto es async
+
                 try {
-                    await buscarProducto(result.codeResult.code);
+                    await buscarProducto(code);
                 } catch (error) {
                     console.error("Error al buscar producto:", error);
                 }
@@ -73,6 +89,9 @@ const stopScanner = () => {
     }
     document.getElementById('scanner-modal').style.display = 'none';
     document.getElementById('scanner-error').style.display = 'none';
+    // Resetear las variables de control al detener el escáner
+    lastScannedCode = null;
+    lastScannedTime = 0;
 };
 
 // Event listeners

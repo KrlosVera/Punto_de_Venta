@@ -2,15 +2,47 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
 import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, updateDoc, query, where, getDoc, orderBy, limit } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
 import { firebaseConfig } from './config.js';
+import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js';
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth();
 
 // Variables globales
 let productosEnVenta = [];
 let consecutivoActual = 1;
 let stockTemporal = new Map(); // Para llevar el control del stock mientras se hace la venta
+
+// Función para verificar la autenticación
+function checkAuth() {
+    return new Promise((resolve, reject) => {
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                const userRole = sessionStorage.getItem('userRole');
+                if (!userRole) {
+                    signOut(auth);
+                    window.location.href = 'login.html';
+                    reject('No role found');
+                }
+                resolve(userRole);
+            } else {
+                window.location.href = 'login.html';
+                reject('No user found');
+            }
+        });
+    });
+}
+
+// Función para verificar permisos
+function checkPermissions(role, action) {
+    const permissions = {
+        admin: ['view', 'edit', 'delete', 'sell'],
+        vendedor: ['view', 'sell']
+    };
+
+    return permissions[role]?.includes(action) || false;
+}
 
 // Agregar las funciones del escáner
 let scannerIsRunning = false; // Variables para el escáner
@@ -35,7 +67,7 @@ const startScanner = () => {
     return new Promise((resolve, reject) => {
         // Limpiar cualquier instancia previa
         cleanupQuagga();
-        
+
         Quagga.init({
             inputStream: {
                 name: "Live",
@@ -57,7 +89,7 @@ const startScanner = () => {
         }, function (err) {
             if (err) {
                 document.getElementById('scanner-error').style.display = 'block';
-                document.getElementById('scanner-error').textContent = 
+                document.getElementById('scanner-error').textContent =
                     "Error al iniciar la cámara. Por favor, verifica que has dado los permisos necesarios.";
                 reject(err);
                 return;
@@ -66,17 +98,17 @@ const startScanner = () => {
             // Resetear las variables de control al iniciar el escáner
             lastScannedCode = null;
             lastScannedTime = 0;
-            
+
             // Agregar el event listener para la detección
             Quagga.onDetected(async function (result) {
                 const code = result.codeResult.code;
                 const currentTime = Date.now();
 
                 // Verificar si es un código diferente o si ha pasado suficiente tiempo
-                if (code && 
-                    (code !== lastScannedCode || 
-                     currentTime - lastScannedTime > SCAN_DELAY)) {
-                    
+                if (code &&
+                    (code !== lastScannedCode ||
+                        currentTime - lastScannedTime > SCAN_DELAY)) {
+
                     lastScannedCode = code;
                     lastScannedTime = currentTime;
 
@@ -90,7 +122,7 @@ const startScanner = () => {
                     }
                 }
             });
-            
+
             Quagga.start();
             resolve();
         });
@@ -119,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelector('.close-scanner').addEventListener('click', stopScanner);
 
-    document.getElementById('scanner-modal').addEventListener('click', function(e) {
+    document.getElementById('scanner-modal').addEventListener('click', function (e) {
         if (e.target === this) {
             stopScanner();
         }
@@ -167,6 +199,12 @@ async function cargarInventario() {
 }
 
 async function eliminarProducto(id) {
+    const userRole = sessionStorage.getItem('userRole');
+    if (!checkPermissions(userRole, 'delete')) {
+        alert('No tienes permisos para realizar esta acción');
+        return;
+    }
+
     if (confirm('¿Está seguro de eliminar este producto?')) {
         try {
             await deleteDoc(doc(db, "productos", id));
@@ -180,22 +218,23 @@ async function eliminarProducto(id) {
 }
 
 async function editarProducto(id) {
+    const userRole = sessionStorage.getItem('userRole');
+    if (!checkPermissions(userRole, 'edit')) {
+        alert('No tienes permisos para realizar esta acción');
+        return;
+    }
+
     try {
-        // Obtener el documento de Firebase
         const docRef = doc(db, "productos", id);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
             const producto = docSnap.data();
-
-            // Llenar el formulario de edición
             document.getElementById('producto-id').value = id;
             document.getElementById('codigo-edicion').value = producto.codigo;
             document.getElementById('descripcion-edicion').value = producto.descripcion;
             document.getElementById('precio-edicion').value = producto.precio;
             document.getElementById('stock-edicion').value = producto.stock;
-
-            // Mostrar el modal
             document.getElementById('modal-edicion').style.display = 'block';
         }
     } catch (error) {
@@ -285,7 +324,7 @@ async function guardarVenta() {
         try {
             const q = query(ventasRef, orderBy("consecutivo", "desc"), limit(1));
             const querySnapshot = await getDocs(q);
-            
+
             if (!querySnapshot.empty) {
                 const ultimaVenta = querySnapshot.docs[0].data();
                 nuevoConsecutivo = ultimaVenta.consecutivo + 1;
@@ -530,152 +569,196 @@ async function eliminarVenta(id) {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
-    // Cargar datos iniciales
-    await obtenerUltimoConsecutivo(); // Obtener el último consecutivo al inicio
-    cargarInventario();
-    document.getElementById('fecha').textContent = new Date().toLocaleDateString();
 
+    try {
+        // Verificar autenticación
+        const userRole = await checkAuth();
 
-    const menuToggle = document.querySelector('.menu-toggle');
-    const menuLateral = document.querySelector('.menu-lateral');
+        // Mostrar/ocultar elementos según el rol
+        if (userRole === 'vendedor') {
+            // Ocultar elementos para vendedor
+            document.querySelector('[data-seccion="inventario"]').parentElement.style.display = 'none';
+            document.querySelector('[data-seccion="registros"]').parentElement.style.display = 'none';
+            document.querySelectorAll('.editar, .eliminar').forEach(btn => btn.style.display = 'none');
+        }
 
-    menuToggle.addEventListener('click', () => {
-        menuLateral.classList.toggle('activo');
-    });
+        // Agregar información del usuario y botón de logout
+        const userInfo = document.createElement('div');
+        userInfo.className = 'user-info';
+        userInfo.style.padding = '10px 20px';
+        userInfo.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
+        userInfo.style.marginTop = 'auto';
+        userInfo.innerHTML = `
+            <p style="color: white; margin-bottom: 10px;">
+                ${sessionStorage.getItem('userEmail')}
+                <br>
+                <small>${userRole.charAt(0).toUpperCase() + userRole.slice(1)}</small>
+            </p>
+            <button id="logout-btn" style="width: 100%; padding: 8px; background: #e53e3e; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Cerrar Sesión
+            </button>
+        `;
+        document.querySelector('.menu-lateral').appendChild(userInfo);
 
+        // Event listener para logout
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            await signOut(auth);
+            window.location.href = 'login.html';
+        });
 
-    // Navegación del menú
-    document.querySelectorAll('.menu-lateral a').forEach(enlace => {
-        enlace.addEventListener('click', (e) => {
+        // Cargar datos iniciales
+        await obtenerUltimoConsecutivo();
+        cargarInventario();
+        document.getElementById('fecha').textContent = new Date().toLocaleDateString();
+
+        // Event listeners existentes
+        const menuToggle = document.querySelector('.menu-toggle');
+        const menuLateral = document.querySelector('.menu-lateral');
+
+        menuToggle.addEventListener('click', () => {
+            menuLateral.classList.toggle('activo');
+        });
+
+        // Navegación del menú
+        document.querySelectorAll('.menu-lateral a').forEach(enlace => {
+            enlace.addEventListener('click', (e) => {
+                e.preventDefault();
+                const seccion = e.target.getAttribute('data-seccion');
+
+                // Verificar permisos para la sección
+                if (userRole === 'vendedor' && (seccion === 'inventario' || seccion === 'registros')) {
+                    alert('No tienes permisos para acceder a esta sección');
+                    return;
+                }
+
+                document.querySelectorAll('.menu-lateral a').forEach(a => a.classList.remove('activo'));
+                e.target.classList.add('activo');
+
+                document.querySelectorAll('.seccion').forEach(s => s.classList.add('oculto'));
+                document.getElementById(seccion).classList.remove('oculto');
+
+                if (seccion === 'registros') {
+                    cargarRegistroVentas();
+                }
+            });
+        });
+
+        // Event listener para filtro de fechas
+        document.getElementById('filtrar').addEventListener('click', () => {
+            const fechaInicio = document.getElementById('fecha-inicio').value;
+            const fechaFin = document.getElementById('fecha-fin').value;
+
+            if (!fechaInicio || !fechaFin) {
+                alert('Por favor seleccione ambas fechas para filtrar');
+                return;
+            }
+
+            if (fechaInicio > fechaFin) {
+                alert('La fecha de inicio debe ser anterior o igual a la fecha final');
+                return;
+            }
+
+            cargarRegistroVentas(fechaInicio, fechaFin);
+        });
+
+        // Event listener para registro de productos
+        document.getElementById('form-producto').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const seccion = e.target.getAttribute('data-seccion');
-
-            // Actualizar clases activas
-            document.querySelectorAll('.menu-lateral a').forEach(a => a.classList.remove('activo'));
-            e.target.classList.add('activo');
-
-            // Mostrar sección correspondiente
-            document.querySelectorAll('.seccion').forEach(s => s.classList.add('oculto'));
-            document.getElementById(seccion).classList.remove('oculto');
-
-            // Cargar datos si es necesario
-            if (seccion === 'registros') {
-                cargarRegistroVentas();
-            }
+            const producto = {
+                codigo: document.getElementById('codigo').value,
+                descripcion: document.getElementById('descripcion').value,
+                precio: parseFloat(document.getElementById('precio').value),
+                stock: parseInt(document.getElementById('stock').value)
+            };
+            await agregarProducto(producto);
+            e.target.reset();
         });
-    });
 
-    // Event listener para filtro de fechas
-    document.getElementById('filtrar').addEventListener('click', () => {
-        const fechaInicio = document.getElementById('fecha-inicio').value;
-        const fechaFin = document.getElementById('fecha-fin').value;
-
-        if (!fechaInicio || !fechaFin) {
-            alert('Por favor seleccione ambas fechas para filtrar');
-            return;
-        }
-
-        if (fechaInicio > fechaFin) {
-            alert('La fecha de inicio debe ser anterior o igual a la fecha final');
-            return;
-        }
-
-        cargarRegistroVentas(fechaInicio, fechaFin);
-    });
-
-    // Event listener para registro de productos
-    document.getElementById('form-producto').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const producto = {
-            codigo: document.getElementById('codigo').value,
-            descripcion: document.getElementById('descripcion').value,
-            precio: parseFloat(document.getElementById('precio').value),
-            stock: parseInt(document.getElementById('stock').value)
-        };
-        await agregarProducto(producto);
-        e.target.reset();
-    });
-
-    // Event listener para registrar producto en venta
-    document.getElementById('registrar').addEventListener('click', () => {
-        const codigo = document.getElementById('codigo-producto').value;
-        if (codigo) {
-            buscarProducto(codigo);
-        }
-    });
-
-    // Event listeners para botones de venta
-    document.getElementById('guardar').addEventListener('click', guardarVenta);
-    document.getElementById('cancelar').addEventListener('click', limpiarVenta);
-
-    // Event listener para filtro de fechas
-    // document.getElementById('filtrar').addEventListener('click', () => {
-    //     const fechaInicio = document.getElementById('fecha-inicio').value;
-    //     const fechaFin = document.getElementById('fecha-fin').value;
-    //     if (fechaInicio && fechaFin) {
-    //         cargarRegistroVentas(fechaInicio, fechaFin);
-    //     }
-    // });
-
-
-    // En tu script.js, dentro del DOMContentLoaded
-    document.getElementById('scan-button').addEventListener('click', () => {
-        const root = document.getElementById('scanner-container');
-        const handleCodeDetected = (code) => {
-            document.getElementById('codigo-producto').value = code;
-            // Opcionalmente, puedes activar la búsqueda automáticamente
-            buscarProducto(code);
-        };
-
-        // Renderizar el componente del escáner
-        const scannerComponent = React.createElement(BarcodeScanner, {
-            onCodeDetected: handleCodeDetected,
-            onClose: () => {
-                root.style.display = 'none';
-                ReactDOM.unmountComponentAtNode(root);
+        // Event listener para registrar producto en venta
+        document.getElementById('registrar').addEventListener('click', () => {
+            const codigo = document.getElementById('codigo-producto').value;
+            if (codigo) {
+                buscarProducto(codigo);
             }
         });
 
-        root.style.display = 'block';
-        ReactDOM.render(scannerComponent, root);
-    });
+        // Event listeners para botones de venta
+        document.getElementById('guardar').addEventListener('click', guardarVenta);
+        document.getElementById('cancelar').addEventListener('click', limpiarVenta);
+
+        // Event listener para filtro de fechas
+        // document.getElementById('filtrar').addEventListener('click', () => {
+        //     const fechaInicio = document.getElementById('fecha-inicio').value;
+        //     const fechaFin = document.getElementById('fecha-fin').value;
+        //     if (fechaInicio && fechaFin) {
+        //         cargarRegistroVentas(fechaInicio, fechaFin);
+        //     }
+        // });
 
 
-    // Event listener para el formulario de edición
-    document.getElementById('form-edicion').addEventListener('submit', async (e) => {
-        e.preventDefault();
+        // En tu script.js, dentro del DOMContentLoaded
+        document.getElementById('scan-button').addEventListener('click', () => {
+            const root = document.getElementById('scanner-container');
+            const handleCodeDetected = (code) => {
+                document.getElementById('codigo-producto').value = code;
+                // Opcionalmente, puedes activar la búsqueda automáticamente
+                buscarProducto(code);
+            };
 
-        const id = document.getElementById('producto-id').value;
-        const productoActualizado = {
-            codigo: document.getElementById('codigo-edicion').value,
-            descripcion: document.getElementById('descripcion-edicion').value,
-            precio: parseFloat(document.getElementById('precio-edicion').value),
-            stock: parseInt(document.getElementById('stock-edicion').value)
-        };
+            // Renderizar el componente del escáner
+            const scannerComponent = React.createElement(BarcodeScanner, {
+                onCodeDetected: handleCodeDetected,
+                onClose: () => {
+                    root.style.display = 'none';
+                    ReactDOM.unmountComponentAtNode(root);
+                }
+            });
 
-        try {
-            const docRef = doc(db, "productos", id);
-            await updateDoc(docRef, productoActualizado);
-            alert('Producto actualizado correctamente');
-            cerrarModalEdicion();
-            cargarInventario(); // Recargar la tabla
-        } catch (error) {
-            console.error("Error al actualizar producto: ", error);
-            alert('Error al actualizar producto');
-        }
-    });
+            root.style.display = 'block';
+            ReactDOM.render(scannerComponent, root);
+        });
 
 
-    // Event listener para cerrar el modal
-    document.getElementById('cerrar-modal-edicion').addEventListener('click', cerrarModalEdicion);
+        // Event listener para el formulario de edición
+        document.getElementById('form-edicion').addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-    // Cerrar modal al hacer clic fuera de él
-    window.addEventListener('click', (e) => {
-        const modal = document.getElementById('modal-edicion');
-        if (e.target === modal) {
-            cerrarModalEdicion();
-        }
-    });
+            const id = document.getElementById('producto-id').value;
+            const productoActualizado = {
+                codigo: document.getElementById('codigo-edicion').value,
+                descripcion: document.getElementById('descripcion-edicion').value,
+                precio: parseFloat(document.getElementById('precio-edicion').value),
+                stock: parseInt(document.getElementById('stock-edicion').value)
+            };
+
+            try {
+                const docRef = doc(db, "productos", id);
+                await updateDoc(docRef, productoActualizado);
+                alert('Producto actualizado correctamente');
+                cerrarModalEdicion();
+                cargarInventario(); // Recargar la tabla
+            } catch (error) {
+                console.error("Error al actualizar producto: ", error);
+                alert('Error al actualizar producto');
+            }
+        });
+
+
+        // Event listener para cerrar el modal
+        document.getElementById('cerrar-modal-edicion').addEventListener('click', cerrarModalEdicion);
+
+        // Cerrar modal al hacer clic fuera de él
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('modal-edicion');
+            if (e.target === modal) {
+                cerrarModalEdicion();
+            }
+        });
+
+    } catch (error) {
+        console.error('Error de autenticación:', error);
+        window.location.href = 'login.html';
+    }
 });
 
 // Hacer funciones disponibles globalmente para los onclick

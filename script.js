@@ -283,12 +283,11 @@ async function guardarVenta() {
 
         // Intentar obtener el último consecutivo
         try {
-            const q = query(ventasRef, orderBy("consecutivo", "desc"), limit(1));
-            const querySnapshot = await getDocs(q);
-            
+            const querySnapshot = await getDocs(ventasRef);
             if (!querySnapshot.empty) {
-                const ultimaVenta = querySnapshot.docs[0].data();
-                nuevoConsecutivo = ultimaVenta.consecutivo + 1;
+                // Encontrar el máximo consecutivo
+                const consecutivos = querySnapshot.docs.map(doc => doc.data().consecutivo);
+                nuevoConsecutivo = Math.max(...consecutivos) + 1;
             }
         } catch (error) {
             console.error("Error al obtener consecutivo:", error);
@@ -318,8 +317,8 @@ async function guardarVenta() {
             }
         }
 
-        // Actualizar el consecutivo en la UI inmediatamente
-        consecutivoActual = nuevoConsecutivo + 1; // Incrementar para la próxima venta
+        // Actualizar UI
+        consecutivoActual = nuevoConsecutivo;
         document.getElementById('consecutivo').textContent = consecutivoActual;
 
         alert('Venta guardada correctamente');
@@ -394,6 +393,7 @@ async function cargarRegistroVentas(fechaInicio = null, fechaFin = null) {
         let querySnapshot;
 
         if (fechaInicio && fechaFin) {
+            // Convertir las fechas a formato ISO y ajustar para incluir todo el día
             const fechaInicioISO = new Date(fechaInicio + 'T00:00:00').toISOString();
             const fechaFinISO = new Date(fechaFin + 'T23:59:59').toISOString();
 
@@ -419,31 +419,9 @@ async function cargarRegistroVentas(fechaInicio = null, fechaFin = null) {
             }))
             .sort((a, b) => b.consecutivo - a.consecutivo);
 
-        let currentVentaId = null;
-
         ventas.forEach((venta) => {
-            // Añadir encabezado de la venta
-            const trHeader = document.createElement('tr');
-            trHeader.classList.add('venta-header');
-            trHeader.innerHTML = `
-                <td colspan="7">
-                    <strong>Venta #${venta.consecutivo}</strong> - 
-                    Fecha: ${new Date(venta.fecha).toLocaleDateString()} - 
-                    Total de la venta: $${venta.total.toLocaleString()}
-                </td>
-                <td>
-                    <button onclick="eliminarVenta('${venta.id}')" class="eliminar">Eliminar</button>
-                </td>
-            `;
-            tbody.appendChild(trHeader);
-
-            // Añadir los productos de la venta
-            venta.productos.forEach((producto, index) => {
+            venta.productos.forEach(producto => {
                 const tr = document.createElement('tr');
-                tr.classList.add('venta-producto');
-                if (index === venta.productos.length - 1) {
-                    tr.classList.add('ultimo-producto');
-                }
                 tr.innerHTML = `
                     <td>${new Date(venta.fecha).toLocaleDateString()}</td>
                     <td>${venta.consecutivo}</td>
@@ -452,7 +430,9 @@ async function cargarRegistroVentas(fechaInicio = null, fechaFin = null) {
                     <td>${producto.cantidad}</td>
                     <td>$${producto.precioUnitario.toLocaleString()}</td>
                     <td>$${producto.total.toLocaleString()}</td>
-                    <td></td>
+                    <td>
+                        <button onclick="eliminarVenta('${venta.id}')" class="eliminar">Eliminar</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });

@@ -418,3 +418,42 @@ button.editar {
         height: 240px;
     }
 }
+
+/* Estilos para el registro de ventas agrupado */
+.venta-header {
+    background-color: #f8fafc;
+    font-weight: 500;
+}
+
+.venta-header td {
+    padding: 1rem;
+    border-top: 2px solid #3182ce;
+}
+
+.venta-producto {
+    background-color: white;
+}
+
+.venta-producto td {
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.venta-producto.ultimo-producto td {
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 1.5rem;
+}
+
+/* Espacio entre grupos de ventas */
+.venta-header:not(:first-child) {
+    margin-top: 1.5rem;
+}
+
+/* Estilo para el hover en las filas de productos */
+.venta-producto:hover {
+    background-color: #f7fafc;
+}
+
+/* Ajuste para el botón eliminar en el encabezado */
+.venta-header .eliminar {
+    padding: 0.5rem 1rem;
+}

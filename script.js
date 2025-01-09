@@ -11,18 +11,31 @@ const db = getFirestore(app);
 let productosEnVenta = [];
 let consecutivoActual = 1;
 let stockTemporal = new Map(); // Para llevar el control del stock mientras se hace la venta
-// let scannerIsRunning = false; // Variables para el escáner
-
 
 // Agregar las funciones del escáner
-let scannerIsRunning = false;
+let scannerIsRunning = false; // Variables para el escáner
 let lastScannedCode = null;
 let lastScannedTime = 0;
 const SCAN_DELAY = 3000; // 3 segundos de espera entre escaneos
 
-// Convertir startScanner a una función async
+// Función para limpiar los event listeners de Quagga
+const cleanupQuagga = () => {
+    if (Quagga) {
+        // Eliminar todos los event listeners
+        Quagga.offDetected();
+        if (scannerIsRunning) {
+            Quagga.stop();
+            scannerIsRunning = false;
+        }
+    }
+};
+
+// Convertir startScanner a una función async --------------------------------------------------------------------------
 const startScanner = () => {
     return new Promise((resolve, reject) => {
+        // Limpiar cualquier instancia previa
+        cleanupQuagga();
+        
         Quagga.init({
             inputStream: {
                 name: "Live",
@@ -44,7 +57,7 @@ const startScanner = () => {
         }, function (err) {
             if (err) {
                 document.getElementById('scanner-error').style.display = 'block';
-                document.getElementById('scanner-error').textContent =
+                document.getElementById('scanner-error').textContent = 
                     "Error al iniciar la cámara. Por favor, verifica que has dado los permisos necesarios.";
                 reject(err);
                 return;
@@ -53,40 +66,39 @@ const startScanner = () => {
             // Resetear las variables de control al iniciar el escáner
             lastScannedCode = null;
             lastScannedTime = 0;
+            
+            // Agregar el event listener para la detección
+            Quagga.onDetected(async function (result) {
+                const code = result.codeResult.code;
+                const currentTime = Date.now();
+
+                // Verificar si es un código diferente o si ha pasado suficiente tiempo
+                if (code && 
+                    (code !== lastScannedCode || 
+                     currentTime - lastScannedTime > SCAN_DELAY)) {
+                    
+                    lastScannedCode = code;
+                    lastScannedTime = currentTime;
+
+                    document.getElementById('codigo-producto').value = code;
+                    stopScanner();
+
+                    try {
+                        await buscarProducto(code);
+                    } catch (error) {
+                        console.error("Error al buscar producto:", error);
+                    }
+                }
+            });
+            
             Quagga.start();
             resolve();
-        });
-
-        Quagga.onDetected(async function (result) {
-            const code = result.codeResult.code;
-            const currentTime = Date.now();
-
-            // Verificar si es un código diferente o si ha pasado suficiente tiempo
-            if (code &&
-                (code !== lastScannedCode ||
-                    currentTime - lastScannedTime > SCAN_DELAY)) {
-
-                lastScannedCode = code;
-                lastScannedTime = currentTime;
-
-                document.getElementById('codigo-producto').value = code;
-                stopScanner();
-
-                try {
-                    await buscarProducto(code);
-                } catch (error) {
-                    console.error("Error al buscar producto:", error);
-                }
-            }
         });
     });
 };
 
 const stopScanner = () => {
-    if (scannerIsRunning) {
-        Quagga.stop();
-        scannerIsRunning = false;
-    }
+    cleanupQuagga();
     document.getElementById('scanner-modal').style.display = 'none';
     document.getElementById('scanner-error').style.display = 'none';
     // Resetear las variables de control al detener el escáner
@@ -95,22 +107,25 @@ const stopScanner = () => {
 };
 
 // Event listeners
-document.getElementById('scan-button').addEventListener('click', async () => {
-    document.getElementById('scanner-modal').style.display = 'block';
-    try {
-        await startScanner();
-    } catch (error) {
-        console.error("Error al iniciar el escáner:", error);
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('scan-button').addEventListener('click', async () => {
+        document.getElementById('scanner-modal').style.display = 'block';
+        try {
+            await startScanner();
+        } catch (error) {
+            console.error("Error al iniciar el escáner:", error);
+        }
+    });
+
+    document.querySelector('.close-scanner').addEventListener('click', stopScanner);
+
+    document.getElementById('scanner-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            stopScanner();
+        }
+    });
 });
 
-document.querySelector('.close-scanner').addEventListener('click', stopScanner);
-
-document.getElementById('scanner-modal').addEventListener('click', function (e) {
-    if (e.target === this) {
-        stopScanner();
-    }
-});
 //------------------------------------------------------------------------------------------
 
 // Funciones para el manejo de inventario

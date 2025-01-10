@@ -187,8 +187,12 @@ async function cargarInventario() {
                 <td>$${producto.precio.toLocaleString()}</td>
                 <td>${producto.stock}</td>
                 <td>
-                    <button class="editar" onclick="editarProducto('${doc.id}')">Editar</button>
-                    <button class="eliminar" onclick="eliminarProducto('${doc.id}')">Eliminar</button>
+                    <button class="editar" onclick="editarProducto('${doc.id}')">
+                    <img src="imagenes/editar.png" alt="Editar" class="icono-inventario">
+                </button>
+                <button class="eliminar" onclick="eliminarProducto('${doc.id}')">
+                    <img src="imagenes/eliminar.png" alt="Eliminar" class="icono-inventario">
+                </button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -471,7 +475,9 @@ async function cargarRegistroVentas(fechaInicio = null, fechaFin = null) {
                     Total de la venta: $${venta.total.toLocaleString()}
                 </td>
                 <td>
-                    <button onclick="eliminarVenta('${venta.id}')" class="eliminar">Eliminar</button>
+                    <button onclick="eliminarVenta('${venta.id}')" class="eliminar">
+                    <img src="imagenes/eliminar.png" alt="Eliminar" class="icono-eliminarVenta">
+                    </button>
                 </td>
             `;
             tbody.appendChild(trHeader);

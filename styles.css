@@ -5,6 +5,9 @@
     --background-color: #f7fafc;
     --border-radius: 8px;
     --transition: all 0.3s ease;
+    --danger-color: #e53e3e;
+    --warning-color: #ecc94b;
+    --success-color: #48bb78;
 }
 
 * {
@@ -113,6 +116,31 @@ body {
     border-radius: var(--border-radius);
 }
 
+/* Estilizar el campo de entrada de fecha */
+.filtros-registro input[type="date"] {
+    padding: 05px;
+    /* Espaciado dentro del campo */
+    border: 2px solid #ccc;
+    /* Borde de color gris */
+    border-radius: 5px;
+    /* Bordes redondeados */
+    font-size: 16px;
+    /* Tamaño de la fuente */
+    background-color: #f9f9f9;
+    /* Fondo claro */
+    transition: border-color 0.3s ease;
+    /* Transición suave al hacer foco */
+}
+
+.filtros-registro input[type="date"]:focus {
+    border-color: #4CAF50;
+    /* Borde verde cuando el campo tiene el foco */
+    outline: none;
+    /* Eliminar el contorno predeterminado */
+    background-color: #ffffff;
+    /* Fondo blanco cuando está enfocado */
+}
+
 /* Tablas */
 .contenedor-tabla {
     overflow-x: auto;
@@ -125,7 +153,8 @@ table {
     border-spacing: 0;
 }
 
-th, td {
+th,
+td {
     padding: 1rem;
     text-align: left;
     border-bottom: 1px solid #e2e8f0;
@@ -147,10 +176,58 @@ th {
     border-top: 1px solid #e2e8f0;
 }
 
+/* Estilos generales para la sección de totales */
 .totales {
-    font-size: 1.1em;
-    font-weight: 500;
+    font-size: 1.2em;
+    /* Tamaño de fuente ligeramente mayor */
+    font-weight: 600;
+    /* Hacer que el texto sea más grueso */
+    padding: 15px;
+    /* Espaciado alrededor del contenido */
+    border-radius: 8px;
+    /* Bordes redondeados */
+    background-color: #f9f9f9;
+    /* Fondo sutil */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    /* Sombra suave */
+    margin-top: 20px;
+    /* Espacio superior */
+    width: 300px;
+    /* Ancho fijo para mejor alineación */
 }
+
+/* Estilo para los textos dentro de los totales */
+.totales p {
+    margin: 10px 0;
+    /* Separación entre los párrafos */
+    display: flex;
+    justify-content: space-between;
+    /* Alinear el texto y los valores */
+    font-size: 1.1em;
+    color: #333;
+    /* Color oscuro para el texto */
+}
+
+/* Resaltar el total de artículos */
+#total-articulos {
+    font-weight: 700;
+    color: #007bff;
+    /* Azul para los artículos */
+}
+
+/* Resaltar el total de costo */
+#total-costo {
+    font-weight: 700;
+    color: #28a745;
+    /* Verde para el total de costo */
+}
+
+/* Estilo para los totales cuando están en foco (si es necesario) */
+.totales:focus-within {
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.6);
+    /* Resaltar la sección de totales */
+}
+
 
 .botones {
     display: flex;
@@ -208,12 +285,25 @@ button:hover {
 }
 
 button.eliminar {
-    background-color: #e53e3e;
+    background-color: #f7fafc;
+
 }
 
 button.editar {
-    background-color: #ecc94b;
+    background-color: #f7fafc;
     color: #744210;
+}
+
+/* Estilo para los iconos */
+.icono-inventario {
+    width: 20px;
+    /* Ajusta el tamaño del icono */
+    height: 20px;
+    margin-right: 0px;
+    /* Espacio entre el icono y el texto */
+    vertical-align: middle;
+    /* Alinea el icono verticalmente con el texto */
+
 }
 
 /* Modal */
@@ -323,23 +413,131 @@ button.editar {
     display: none !important;
 }
 
-/* Agregar estos estilos al CSS existente */
-
-.scan-button {
-    background-color: #4a5568;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
+/* Estilos para botones principales */
+.btn-primary {
+    background-color: var(--accent-color);
     color: white;
     border: none;
+    padding: 8px 16px;
     border-radius: var(--border-radius);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     transition: var(--transition);
 }
 
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.btn-primary .icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) invert(1);
+}
+
+/* Estilos para boton guardar */
+.btn-guardar {
+    background-color: #19b04e;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--transition);
+}
+
+.btn-guardar:hover {
+    opacity: 0.9;
+}
+
+.btn-guardar .icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) invert(1);
+}
+
+/* Estilos para botones secundarios */
+.btn-secondary {
+    background-color: #d13b3c;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--transition);
+}
+
+.btn-secondary:hover {
+    opacity: 0.9;
+}
+
+.btn-secondary .icon {
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) invert(1);
+}
+
+.icono-eliminarVenta {
+    width: 20px;  /* Ajusta el tamaño del icono */
+    height: 20px;
+    margin-right: 0px;  /* Espacio entre el icono y el texto */
+    vertical-align: middle;  /* Alinea el icono verticalmente con el texto */
+}
+
+/* Estilo para los iconos */
+.icono {
+
+    width: 20px;
+    /* Ajusta el tamaño del icono */
+    height: 20px;
+    margin-right: 10px;
+    /* Espacio entre el icono y el texto */
+    vertical-align: middle;
+    /* Alinea el icono verticalmente con el texto */
+    filter: invert(100%);
+}
+
+/* Estilo para los enlaces */
+a {
+    display: flex;
+    /* Usa flexbox para alinear texto e imagen */
+    align-items: center;
+    /* Alinea verticalmente el texto y el icono */
+}
+
+
+
+/* Agregar estos estilos al CSS existente */
+
+.scan-button {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    min-width: 36px;
+    min-height: 36px;
+}
+
 .scan-button:hover {
-    background-color: #2d3748;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.scan-button .icon {
+    width: 30px;
+    height: 30px;
 }
 
 .scanner-modal {
@@ -388,7 +586,7 @@ button.editar {
     margin-bottom: 20px;
 }
 
-.viewport > video {
+.viewport>video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -413,7 +611,7 @@ button.editar {
         margin: 10% auto;
         width: 95%;
     }
-    
+
     .viewport {
         height: 240px;
     }
@@ -457,3 +655,5 @@ button.editar {
 .venta-header .eliminar {
     padding: 0.5rem 1rem;
 }
+
+/*---------------------------------------------------------------------------------

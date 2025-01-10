@@ -396,7 +396,9 @@ function actualizarTablaVenta() {
             <td>$${producto.precioUnitario.toLocaleString()}</td>
             <td>$${producto.total.toLocaleString()}</td>
             <td>
-                <button onclick="eliminarDeVenta(${index})" class="eliminar">Eliminar</button>
+               <button onclick="eliminarDeVenta(${index})" class="eliminar">
+        <img src="imagenes/eliminar.png" alt="Eliminar" class="icono-eliminarVenProd"> Eliminar
+    </button>
             </td>
         `;
         tbody.appendChild(tr);

@@ -22,10 +22,18 @@
             </div>
             <nav>
                 <ul>
-                    <li><a href="#" data-seccion="ventas" class="activo">Punto de Venta</a></li>
-                    <li><a href="#" data-seccion="inventario">Gestión de Inventario</a></li>
-                    <li><a href="#" data-seccion="registros">Registro de Ventas</a></li>
+                    <li><a href="#" data-seccion="ventas" class="activo">
+                            <img src="imagenes/punto-venta.png" alt="Punto de Venta" class="icono"> Punto de Venta
+                        </a></li>
+                    <li><a href="#" data-seccion="inventario">
+                            <img src="imagenes/inventario.png" alt="Gestión de Inventario" class="icono"> Gestión de
+                            Inventario
+                        </a></li>
+                    <li><a href="#" data-seccion="registros">
+                            <img src="imagenes/registro-ventas.png" alt="Registro de Ventas" class="icono"> Registro de Ventas
+                        </a></li>
                 </ul>
+
             </nav>
         </div>
 
@@ -46,9 +54,13 @@
                         <label for="codigo-producto">CÓDIGO:</label>
                         <input type="text" id="codigo-producto" placeholder="Introduzca el código del producto">
                         <button id="scan-button" class="scan-button">
-                            <i class="fas fa-camera"></i> Escanear
+                            <img src="imagenes/scan.png" alt="Escanear" class="icon">
+                            <!-- <i class="fas fa-camera"></i> Escanear -->
                         </button>
-                        <button id="registrar">REGISTRAR</button>
+                        <button id="registrar" class="btn-primary">
+                            <img src="imagenes/registrar.png" alt="Registrar" class="icon">
+                            <span>Registrar</span>
+                        </button>
                     </div>
                 </div>
 
@@ -74,8 +86,14 @@
                         <p>TOTAL: <span id="total-costo">$0</span></p>
                     </div>
                     <div class="botones">
-                        <button id="guardar">GUARDAR</button>
-                        <button id="cancelar">CANCELAR</button>
+                        <button id="guardar" class="btn-guardar">
+                            <img src="imagenes/save.png" alt="Guardar" class="icon">
+                            <span>Vender</span>
+                        </button>
+                        <button id="cancelar" class="btn-secondary">
+                            <img src="imagenes/cancel.png" alt="Cancelar" class="icon">
+                            <span>Cancelar</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -106,8 +124,13 @@
                             <input type="number" id="stock" required>
                         </div>
                         <div class="botones">
-                            <button type="submit">Guardar Producto</button>
-                            <button type="reset">Limpiar</button>
+                            <button type="submit" class="btn-primary">
+                                <img src="imagenes/guardar-producto.png" alt="Guardar" class="icon">
+                                <span>Guardar Producto</span>
+                            </button>
+                            <button type="reset" class="btn-secondary">
+                                <img src="imagenes/limpiar.png" alt="Limpiar" class="icon">
+                                <span>Limpiar</span>
                         </div>
                     </form>
                 </div>
@@ -138,7 +161,10 @@
                 <div class="filtros-registro">
                     <input type="date" id="fecha-inicio">
                     <input type="date" id="fecha-fin">
-                    <button id="filtrar">Filtrar</button>
+                    <button id="filtrar" class="btn-primary">
+                        <img src="imagenes/filtrar.png" alt="Filtrar" class="icon">
+                        <span>Filtrar</span>
+                    </button>
                 </div>
 
                 <table id="tabla-registros">
